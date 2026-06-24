@@ -1,3 +1,5 @@
+import subprocess
+
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -15,6 +17,8 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+from . import enviroment, period
 
 PRIMARY_COLOR = colors.midnightblue
 SECONDARY_COLOR = colors.lightslategray
@@ -55,8 +59,8 @@ stylesheet.add(
 class PDF:
     elements = []
 
-    def __init__(self, config, path):
-        self.config = config
+    def __init__(self, path):
+        self.config = enviroment.config
         self.doc = SimpleDocTemplate(path, pagesize=A4)
         self.styles = stylesheet
 
@@ -204,3 +208,34 @@ class PDF:
 
     def build(self):
         self.doc.build(self.elements)
+
+
+def generate(df):
+
+    output_dir = enviroment.config.get("OUTPUT_DIR", "/tmp")
+    invoice_nr = period.NOW.strftime("%Y%m%d%H%M%S")
+    folder = f"{output_dir}/backoffice"
+    file = f"{folder}/{invoice_nr}.pdf"
+
+    # generate the PDF
+    pdf = PDF(file)
+    # pdf = PDF(config, "test.pdf")
+    pdf.title("FACTUUR", "Declaratie EV laden")
+    pdf.header(
+        data=[
+            ["VAN", "FACTUUR"],
+            ["Willem Bressers", f"Nummer: {invoice_nr}"],
+            ["De Pottenbakker 28", f"Datum: {period.NOW.strftime('%Y-%m-%d')}"],
+            [
+                "5506GC, Veldhoven",
+                f"Periode: {period.START.strftime('%Y-%m-%d')} tot {period.END.strftime('%Y-%m-%d')}",
+            ],
+        ]
+    )
+    pdf.data(df)
+    pdf.summary(df)
+    pdf.build()
+
+    # open the pdf with default application
+    subprocess.run(["open", folder])
+    subprocess.run(["open", file])

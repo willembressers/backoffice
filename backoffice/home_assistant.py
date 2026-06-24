@@ -1,13 +1,12 @@
 import base64
 import json
+import logging
 import os
 import socket
 import struct
 from urllib.parse import urlparse
 
-from dotenv import dotenv_values
-
-config = dotenv_values(".env")
+from . import enviroment, period
 
 
 def _recv_exact(sock, size):
@@ -22,7 +21,7 @@ def _recv_exact(sock, size):
 
 def websocket_connect():
     """Open a Home Assistant WebSocket connection."""
-    url = urlparse(config.get("BASE_URL"))
+    url = urlparse(enviroment.config.get("BASE_URL"))
     host = url.hostname
     port = url.port or 80
     path = "/api/websocket"
@@ -44,7 +43,7 @@ def websocket_connect():
     while b"\r\n\r\n" not in response:
         response += sock.recv(1024)
 
-    print(response.decode())
+    logging.info(response.decode())
     return sock
 
 
@@ -65,7 +64,7 @@ def websocket_read(sock):
         raise RuntimeError(f"Unexpected opcode: {opcode}")
 
     message = payload.decode()
-    print(message)
+    logging.info(message)
     return json.loads(message)
 
 
@@ -100,7 +99,7 @@ def websocket_auth(sock):
         sock,
         {
             "type": "auth",
-            "access_token": config.get("TOKEN"),
+            "access_token": enviroment.config.get("TOKEN"),
         },
     )
     return websocket_read(sock)
@@ -125,7 +124,7 @@ def statistics_during_period(
     return websocket_read(sock)
 
 
-def data(start, end, charger_entity_id, tariff_entity_id):
+def data():
 
     sock = websocket_connect()
     try:
@@ -134,18 +133,18 @@ def data(start, end, charger_entity_id, tariff_entity_id):
         charger_data = statistics_during_period(
             sock=sock,
             message_id=1,
-            start=start,
-            end=end,
-            statistic_ids=[charger_entity_id],
+            start=period.START,
+            end=period.END,
+            statistic_ids=[enviroment.config.get("CHARGER_ENTITY_ID")],
             period="day",
             types=["change"],
         )
         tariff_data = statistics_during_period(
             sock=sock,
             message_id=2,
-            start=start,
-            end=end,
-            statistic_ids=[tariff_entity_id],
+            start=period.START,
+            end=period.END,
+            statistic_ids=[enviroment.config.get("TARIFF_ENTITY_ID")],
             period="day",
             types=["max"],
         )

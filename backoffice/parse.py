@@ -1,26 +1,30 @@
 import pandas as pd
-from dotenv import dotenv_values
 
-config = dotenv_values(".env")
+from . import enviroment, period
 
 
-def data(data, entity_id, now, end):
+def data(data, entity_id):
     """Convert Home Assistant statistic timestamps into readable datetimes."""
     df = pd.DataFrame(data.get(entity_id, []))
     df["start"] = pd.to_datetime(df["start"], unit="ms", utc=True).dt.tz_convert(
-        now.astimezone().tzinfo
+        period.NOW.astimezone().tzinfo
     )
     df["end"] = pd.to_datetime(df["end"], unit="ms", utc=True).dt.tz_convert(
-        now.astimezone().tzinfo
+        period.NOW.astimezone().tzinfo
     )
 
     # Day statistics start at local midnight, so the last day of the range
     # must be kept when its bucket starts exactly on `end`.
-    df = df[df["start"].dt.tz_localize(None) <= end]
+    df = df[df["start"].dt.tz_localize(None) <= period.END]
     return df
 
 
-def both(charger_df, tariff_df):
+def both(charger_data, tariff_data):
+    charger_df = data(
+        charger_data["result"], enviroment.config.get("CHARGER_ENTITY_ID")
+    )
+    tariff_df = data(tariff_data["result"], enviroment.config.get("TARIFF_ENTITY_ID"))
+
     # combine
     df = pd.merge(charger_df, tariff_df)
 
@@ -34,7 +38,7 @@ def both(charger_df, tariff_df):
     df = df.rename(columns={"change": "usage", "max": "cost"})
 
     # add a small fee
-    df["cost"] = df["cost"] + float(config.get("FEE", 0))
+    df["cost"] = df["cost"] + float(enviroment.config.get("FEE", 0))
 
     # add the cost per kWh and calculate the total cost
     df["total"] = df["usage"] * df["cost"]
